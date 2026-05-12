@@ -5,6 +5,7 @@ const envSchema = z.object({
   DISCORD_TOKEN: z.string().trim().min(1, "DISCORD_TOKEN is required"),
   DISCORD_CLIENT_ID: z.string().trim().min(1, "DISCORD_CLIENT_ID is required"),
   DISCORD_GUILD_ID: z.string().trim().min(1).optional(),
+  YOUTUBE_COOKIE: z.string().trim().min(1).optional(),
   MAX_PLAYLIST_SIZE: z.coerce.number().int().positive().max(100).default(25),
 });
 

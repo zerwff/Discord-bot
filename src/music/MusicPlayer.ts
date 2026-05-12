@@ -22,6 +22,7 @@ import {
 } from "discord.js";
 import play, { type YouTubeVideo } from "play-dl";
 import { formatDuration, truncate } from "../utils/format.js";
+import { isYouTubeBotCheck } from "../youtube.js";
 
 type CachedCommandInteraction = ChatInputCommandInteraction<"cached">;
 
@@ -168,38 +169,46 @@ export class MusicPlayer {
   }
 
   private async resolveTracks(query: string, requestedBy: Snowflake): Promise<Track[]> {
-    const validation = await play.validate(query);
+    try {
+      const validation = await play.validate(query);
 
-    if (validation === "yt_video") {
-      const info = await play.video_basic_info(query);
-      return [this.toTrack(info.video_details, requestedBy)];
-    }
-
-    if (validation === "yt_playlist") {
-      const playlist = await play.playlist_info(query, { incomplete: true });
-      const videos = await playlist.next(this.maxPlaylistSize);
-
-      if (videos.length === 0) {
-        throw new BotError("재생할 수 있는 플레이리스트 영상을 찾지 못했습니다.");
+      if (validation === "yt_video") {
+        const info = await play.video_basic_info(query);
+        return [this.toTrack(info.video_details, requestedBy)];
       }
 
-      return videos.map((video) => this.toTrack(video, requestedBy));
+      if (validation === "yt_playlist") {
+        const playlist = await play.playlist_info(query, { incomplete: true });
+        const videos = await playlist.next(this.maxPlaylistSize);
+
+        if (videos.length === 0) {
+          throw new BotError("재생할 수 있는 플레이리스트 영상을 찾지 못했습니다.");
+        }
+
+        return videos.map((video) => this.toTrack(video, requestedBy));
+      }
+
+      if (this.isProbablyUrl(query)) {
+        throw new BotError("현재는 YouTube 영상/플레이리스트 링크 또는 검색어를 지원합니다.");
+      }
+
+      const results = await play.search(query, {
+        limit: 1,
+        source: { youtube: "video" },
+      });
+
+      if (results.length === 0) {
+        throw new BotError("검색 결과를 찾지 못했습니다.");
+      }
+
+      return [this.toTrack(results[0], requestedBy)];
+    } catch (error) {
+      if (error instanceof BotError) {
+        throw error;
+      }
+
+      throw this.toPlaybackError(error);
     }
-
-    if (this.isProbablyUrl(query)) {
-      throw new BotError("현재는 YouTube 영상/플레이리스트 링크 또는 검색어를 지원합니다.");
-    }
-
-    const results = await play.search(query, {
-      limit: 1,
-      source: { youtube: "video" },
-    });
-
-    if (results.length === 0) {
-      throw new BotError("검색 결과를 찾지 못했습니다.");
-    }
-
-    return [this.toTrack(results[0], requestedBy)];
   }
 
   private async getOrCreateQueue(
@@ -310,7 +319,7 @@ export class MusicPlayer {
       await this.notify(queue, `재생 시작: ${this.describeTrack(nextTrack)}`);
     } catch (error) {
       console.error("Failed to play track:", error);
-      await this.notify(queue, `곡을 재생하지 못했습니다: ${this.describeTrack(nextTrack)}`);
+      await this.notify(queue, `${this.toPlaybackError(error).message}: ${this.describeTrack(nextTrack)}`);
       queue.current = undefined;
       await this.playNext(queue);
     }
@@ -412,5 +421,13 @@ export class MusicPlayer {
     } catch {
       return false;
     }
+  }
+
+  private toPlaybackError(error: unknown): BotError {
+    if (isYouTubeBotCheck(error)) {
+      return new BotError("YouTube가 봇 검증을 요구해서 재생할 수 없습니다. YOUTUBE_COOKIE 설정이 필요합니다");
+    }
+
+    return new BotError("YouTube 정보를 가져오거나 재생 스트림을 여는 데 실패했습니다");
   }
 }

@@ -1,8 +1,11 @@
 import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { loadConfig } from "./config.js";
 import { MusicPlayer } from "./music/MusicPlayer.js";
+import { configureYouTube } from "./youtube.js";
 
 const config = loadConfig();
+configureYouTube(config.YOUTUBE_COOKIE);
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 });
