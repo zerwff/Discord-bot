@@ -370,7 +370,7 @@ export class MusicPlayer {
   private async notify(queue: GuildMusicQueue, content: string): Promise<void> {
     const channel = await this.client.channels.fetch(queue.textChannelId).catch(() => null);
 
-    if (!channel?.isTextBased()) {
+    if (!channel?.isSendable()) {
       return;
     }
 
