@@ -1,0 +1,39 @@
+{
+  "name": "discord-music-bot",
+  "version": "1.0.0",
+  "description": "Discord slash-command music bot",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "deploy:commands": "tsx src/deploy-commands.ts",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "check": "npm run build && npm test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zerwff/Discord-bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zerwff/Discord-bot/issues"
+  },
+  "homepage": "https://github.com/zerwff/Discord-bot#readme",
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.26.4",
+    "dotenv": "^17.4.2",
+    "libsodium-wrappers": "^0.8.4",
+    "play-dl": "^1.9.7",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
