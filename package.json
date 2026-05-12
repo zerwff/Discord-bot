@@ -29,6 +29,7 @@
     "dotenv": "^17.4.2",
     "libsodium-wrappers": "^0.8.4",
     "play-dl": "^1.9.7",
+    "youtube-dl-exec": "^3.1.6",
     "zod": "^4.4.3"
   },
   "devDependencies": {

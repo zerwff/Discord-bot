@@ -1,7 +1,6 @@
 import {
   AudioPlayerStatus,
   NoSubscriberBehavior,
-  StreamType,
   VoiceConnectionStatus,
   createAudioPlayer,
   createAudioResource,
@@ -22,7 +21,7 @@ import {
 } from "discord.js";
 import play, { type YouTubeVideo } from "play-dl";
 import { formatDuration, truncate } from "../utils/format.js";
-import { isYouTubeBotCheck } from "../youtube.js";
+import { createYouTubeAudioStream, isYouTubeBotCheck, normalizeYouTubeWatchUrl } from "../youtube.js";
 
 type CachedCommandInteraction = ChatInputCommandInteraction<"cached">;
 
@@ -308,9 +307,8 @@ export class MusicPlayer {
     queue.current = nextTrack;
 
     try {
-      const stream = await play.stream(nextTrack.url);
-      const resource = createAudioResource(stream.stream, {
-        inputType: stream.type as unknown as StreamType,
+      const stream = await createYouTubeAudioStream(nextTrack.url);
+      const resource = createAudioResource(stream, {
         metadata: nextTrack,
       });
 
@@ -402,7 +400,7 @@ export class MusicPlayer {
   private toTrack(video: YouTubeVideo, requestedBy: Snowflake): Track {
     return {
       title: video.title ?? "Untitled",
-      url: video.url,
+      url: normalizeYouTubeWatchUrl(video.url),
       duration: formatDuration(video.durationInSec),
       durationInSec: video.durationInSec,
       requestedBy,
