@@ -3,6 +3,7 @@ import { loadConfig } from "./config.js";
 import { MusicPlayer } from "./music/MusicPlayer.js";
 import { configureYouTube } from "./youtube.js";
 
+const BOT_USERNAME = "（＠・へ・＠）";
 const config = loadConfig();
 configureYouTube(config.YOUTUBE_COOKIE);
 
@@ -11,8 +12,14 @@ const client = new Client({
 });
 const musicPlayer = new MusicPlayer(client, config.MAX_PLAYLIST_SIZE);
 
-client.once(Events.ClientReady, (readyClient) => {
-  console.log(`Logged in as ${readyClient.user.tag}`);
+client.once(Events.ClientReady, async (readyClient) => {
+  if (readyClient.user.username !== BOT_USERNAME) {
+    await readyClient.user.setUsername(BOT_USERNAME).catch((error: unknown) => {
+      console.error("봇 이름 변경 실패:", error);
+    });
+  }
+
+  console.log(`${readyClient.user.tag} 로그인 완료`);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -89,6 +96,13 @@ async function handleInteractionError(
 
   if (interaction.deferred || interaction.replied) {
     await interaction.editReply({ content: message, embeds: [], components: [] });
+  } else if (interaction.isButton()) {
+    await interaction.update({
+      content: message,
+      embeds: [],
+      components: [],
+      allowedMentions: { parse: [] },
+    });
   } else {
     await interaction.reply({
       content: message,

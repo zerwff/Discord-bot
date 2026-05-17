@@ -37,6 +37,7 @@ type CachedButtonInteraction = ButtonInteraction<"cached">;
 type CachedMusicInteraction = CachedCommandInteraction | CachedButtonInteraction;
 
 const MUSIC_COLOR = 0x8b5cf6;
+const MUSIC_PLAYER_NAME = "（＠・へ・＠） 음악 플레이어";
 const MUSIC_PREFIX = "music:";
 const MUSIC_CONTROLS = {
   pause: `${MUSIC_PREFIX}pause`,
@@ -54,6 +55,7 @@ interface Track {
   duration: string;
   durationInSec: number;
   requestedBy: Snowflake;
+  thumbnailUrl?: string;
 }
 
 interface GuildMusicQueue {
@@ -147,7 +149,7 @@ export class MusicPlayer {
         : `${tracks.length}곡을 대기열에 추가했습니다.`;
 
     await this.respondWithQueue(interaction, queue, {
-      title: "Music Added",
+      title: "대기열에 추가됨",
       description,
       highlightedTrack: tracks[0],
     });
@@ -165,7 +167,7 @@ export class MusicPlayer {
     const skipped = queue.current;
     queue.player.stop(true);
     await this.respondWithQueue(interaction, queue, {
-      title: "Skipped",
+      title: "건너뛰기",
       description: "현재 곡을 건너뜁니다.",
       highlightedTrack: skipped,
     });
@@ -177,7 +179,7 @@ export class MusicPlayer {
     this.destroyQueue(interaction.guildId);
 
     await this.respondEmbed(interaction, {
-      title: "Player Stopped",
+      title: "재생 정지",
       description: "재생을 멈추고 대기열을 비웠습니다.",
       status: "정지",
       includeControls: false,
@@ -194,7 +196,7 @@ export class MusicPlayer {
     }
 
     await this.respondWithQueue(interaction, queue, {
-      title: "Paused",
+      title: "일시정지",
       description: "현재 곡을 일시정지했습니다.",
       status: "일시정지",
     });
@@ -210,7 +212,7 @@ export class MusicPlayer {
     }
 
     await this.respondWithQueue(interaction, queue, {
-      title: "Resumed",
+      title: "재생 재개",
       description: "다시 재생합니다.",
       status: "재생 중",
     });
@@ -220,7 +222,7 @@ export class MusicPlayer {
     const queue = this.requireQueue(interaction.guildId);
 
     await this.respondWithQueue(interaction, queue, {
-      title: "Music Queue",
+      title: "음악 대기열",
       description: queue.tracks.length === 0 ? "대기열이 비어 있습니다." : "다음 곡 목록입니다.",
       includeQueuePreview: true,
     });
@@ -235,7 +237,7 @@ export class MusicPlayer {
     }
 
     await this.respondWithQueue(interaction, queue, {
-      title: "Now Playing",
+      title: "현재 재생 중",
       description: "현재 재생 중인 곡입니다.",
       highlightedTrack: queue.current,
     });
@@ -247,7 +249,7 @@ export class MusicPlayer {
     this.destroyQueue(interaction.guildId);
 
     await this.respondEmbed(interaction, {
-      title: "Disconnected",
+      title: "연결 종료",
       description: "음성 채널에서 나갔습니다.",
       status: "연결 종료",
       includeControls: false,
@@ -364,7 +366,7 @@ export class MusicPlayer {
 
       if (failedTrack) {
         void this.notifyEmbed(queue, {
-          title: "Playback Error",
+          title: "재생 오류",
           description: "재생 중 오류가 발생했습니다.",
           highlightedTrack: failedTrack,
           status: "오류",
@@ -397,7 +399,7 @@ export class MusicPlayer {
 
     if (!nextTrack) {
       await this.notifyEmbed(queue, {
-        title: "Queue Finished",
+        title: "대기열 종료",
         description: "대기열이 끝났습니다. 음성 채널에서 나갑니다.",
         status: "완료",
         includeControls: false,
@@ -417,7 +419,7 @@ export class MusicPlayer {
       queue.player.play(resource);
       await entersState(queue.player, AudioPlayerStatus.Playing, 15_000);
       await this.notifyWithQueue(queue, {
-        title: "Now Playing",
+        title: "현재 재생 중",
         description: "재생을 시작합니다.",
         highlightedTrack: nextTrack,
         status: "재생 중",
@@ -425,7 +427,7 @@ export class MusicPlayer {
     } catch (error) {
       console.error("Failed to play track:", error);
       await this.notifyEmbed(queue, {
-        title: "Playback Failed",
+        title: "재생 실패",
         description: this.toPlaybackError(error).message,
         highlightedTrack: nextTrack,
         status: "실패",
@@ -499,7 +501,17 @@ export class MusicPlayer {
 
   private async respond(interaction: CachedMusicInteraction, content: string, ephemeral = false): Promise<void> {
     if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content });
+      await interaction.editReply({ content, embeds: [], components: [] });
+      return;
+    }
+
+    if (interaction.isButton()) {
+      await interaction.update({
+        content,
+        embeds: [],
+        components: [],
+        allowedMentions: { parse: [] },
+      });
       return;
     }
 
@@ -527,6 +539,11 @@ export class MusicPlayer {
 
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply(payload);
+      return;
+    }
+
+    if (interaction.isButton()) {
+      await interaction.update(payload);
       return;
     }
 
@@ -575,17 +592,17 @@ export class MusicPlayer {
 
     if (featuredTrack) {
       fields.push({
-        name: "Track",
+        name: "곡 정보",
         value: this.describeTrack(featuredTrack),
       });
       fields.push(
         {
-          name: "Duration",
+          name: "길이",
           value: featuredTrack.duration,
           inline: true,
         },
         {
-          name: "Requested by",
+          name: "신청자",
           value: `<@${featuredTrack.requestedBy}>`,
           inline: true,
         },
@@ -594,14 +611,14 @@ export class MusicPlayer {
 
     if (options.currentTrack && options.highlightedTrack && options.currentTrack.url !== options.highlightedTrack.url) {
       fields.push({
-        name: "Now Playing",
+        name: "현재 재생 중",
         value: this.describeTrack(options.currentTrack),
       });
     }
 
     if (typeof options.queueLength === "number") {
       fields.push({
-        name: "Queue",
+        name: "대기열",
         value: `${options.queueLength}곡 대기 중`,
         inline: true,
       });
@@ -609,7 +626,7 @@ export class MusicPlayer {
 
     if (options.voiceChannelId) {
       fields.push({
-        name: "Voice",
+        name: "음성 채널",
         value: `<#${options.voiceChannelId}>`,
         inline: true,
       });
@@ -617,19 +634,25 @@ export class MusicPlayer {
 
     if (options.queuePreview) {
       fields.push({
-        name: "Up Next",
+        name: "다음 곡",
         value: this.formatQueuePreview(options.queuePreview),
       });
     }
 
-    return new EmbedBuilder()
+    const embed = new EmbedBuilder()
       .setColor(MUSIC_COLOR)
-      .setAuthor({ name: "Discord Music Player" })
+      .setAuthor({ name: MUSIC_PLAYER_NAME })
       .setTitle(options.title)
       .setDescription(options.description)
       .addFields(fields)
-      .setFooter({ text: `Status: ${options.status ?? "대기 중"}` })
+      .setFooter({ text: `상태: ${options.status ?? "대기 중"}` })
       .setTimestamp();
+
+    if (featuredTrack?.thumbnailUrl) {
+      embed.setThumbnail(featuredTrack.thumbnailUrl);
+    }
+
+    return embed;
   }
 
   private createControlRows(): ActionRowBuilder<ButtonBuilder>[] {
@@ -637,39 +660,39 @@ export class MusicPlayer {
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.pause)
-          .setLabel("Pause")
+          .setLabel("일시정지")
           .setEmoji("⏸️")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.resume)
-          .setLabel("Resume")
+          .setLabel("재개")
           .setEmoji("▶️")
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.skip)
-          .setLabel("Skip")
+          .setLabel("건너뛰기")
           .setEmoji("⏭️")
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.stop)
-          .setLabel("Stop")
+          .setLabel("정지")
           .setEmoji("⏹️")
           .setStyle(ButtonStyle.Danger),
       ),
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.queue)
-          .setLabel("Queue")
+          .setLabel("대기열")
           .setEmoji("📜")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.nowPlaying)
-          .setLabel("Now Playing")
+          .setLabel("현재곡")
           .setEmoji("🎧")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.leave)
-          .setLabel("Leave")
+          .setLabel("나가기")
           .setEmoji("👋")
           .setStyle(ButtonStyle.Secondary),
       ),
@@ -707,11 +730,12 @@ export class MusicPlayer {
 
   private toTrack(video: YouTubeVideo, requestedBy: Snowflake): Track {
     return {
-      title: video.title ?? "Untitled",
+      title: video.title ?? "제목 없음",
       url: normalizeYouTubeWatchUrl(video.url),
       duration: formatDuration(video.durationInSec),
       durationInSec: video.durationInSec,
       requestedBy,
+      thumbnailUrl: this.getThumbnailUrl(video),
     };
   }
 
@@ -731,9 +755,15 @@ export class MusicPlayer {
 
   private toPlaybackError(error: unknown): BotError {
     if (isYouTubeBotCheck(error)) {
-      return new BotError("YouTube가 봇 검증을 요구해서 재생할 수 없습니다. YOUTUBE_COOKIE 설정이 필요합니다");
+      return new BotError("YouTube가 봇 검증을 요구해서 재생할 수 없습니다. 유튜브 쿠키 설정이 필요합니다");
     }
 
     return new BotError("YouTube 정보를 가져오거나 재생 스트림을 여는 데 실패했습니다");
+  }
+
+  private getThumbnailUrl(video: YouTubeVideo): string | undefined {
+    return video.thumbnails
+      .filter((thumbnail) => thumbnail.url)
+      .sort((first, second) => (second.width ?? 0) - (first.width ?? 0))[0]?.url;
   }
 }
