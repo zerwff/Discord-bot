@@ -589,8 +589,6 @@ export class MusicPlayer {
   private createMusicEmbed(options: MusicEmbedOptions): EmbedBuilder {
     const fields: APIEmbedField[] = [];
     const featuredTrack = options.highlightedTrack ?? options.currentTrack;
-    const status = options.status ?? "대기 중";
-
     if (featuredTrack) {
       fields.push({
         name: "[ 곡 정보 ]",
@@ -598,7 +596,7 @@ export class MusicPlayer {
       });
     }
 
-    fields.push(...this.createInlineInfoFields(status, options, featuredTrack));
+    fields.push(...this.createInlineInfoFields(options, featuredTrack));
 
     if (options.currentTrack && options.highlightedTrack && options.currentTrack.url !== options.highlightedTrack.url) {
       fields.push({
@@ -618,7 +616,6 @@ export class MusicPlayer {
       .setColor(MUSIC_COLOR)
       .setTitle(MUSIC_PLAYER_NAME)
       .addFields(fields)
-      .setFooter({ text: `상태: ${status}` })
       .setTimestamp();
 
     if (featuredTrack?.thumbnailUrl) {
@@ -628,11 +625,7 @@ export class MusicPlayer {
     return embed;
   }
 
-  private createInlineInfoFields(
-    status: string,
-    options: MusicEmbedOptions,
-    featuredTrack?: Track,
-  ): APIEmbedField[] {
+  private createInlineInfoFields(options: MusicEmbedOptions, featuredTrack?: Track): APIEmbedField[] {
     return [
       {
         name: "채널",
@@ -645,18 +638,8 @@ export class MusicPlayer {
         inline: true,
       },
       {
-        name: "대기열",
-        value: typeof options.queueLength === "number" ? `${options.queueLength}곡` : "-",
-        inline: true,
-      },
-      {
         name: "신청자",
         value: featuredTrack ? `<@${featuredTrack.requestedBy}>` : "-",
-        inline: true,
-      },
-      {
-        name: "상태",
-        value: status,
         inline: true,
       },
     ];
