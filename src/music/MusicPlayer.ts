@@ -592,6 +592,8 @@ export class MusicPlayer {
   private createMusicEmbed(options: MusicEmbedOptions): EmbedBuilder {
     const fields: APIEmbedField[] = [];
     const featuredTrack = options.highlightedTrack ?? options.currentTrack;
+    const status = options.status ?? "대기 중";
+
     if (featuredTrack) {
       fields.push({
         name: "[ 곡 정보 ]",
