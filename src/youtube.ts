@@ -28,21 +28,36 @@ export function isYouTubeBotCheck(error: unknown): boolean {
   return error instanceof Error && /sign in to confirm/i.test(error.message);
 }
 
-export async function createYouTubeAudioStream(url: string): Promise<Readable> {
+export interface YouTubeAudioStream {
+  stream: Readable;
+  mimeType?: string;
+}
+
+export async function createYouTubeAudioStream(url: string): Promise<YouTubeAudioStream> {
   const audioUrl = await getYouTubeAudioUrl(url);
-  const response = await fetch(audioUrl);
+  const response = await fetch(audioUrl, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36",
+    },
+  });
 
   if (!response.ok || !response.body) {
     throw new Error(`Audio URL request failed with status ${response.status}`);
   }
 
-  return Readable.fromWeb(response.body as unknown as WebReadableStream<Uint8Array>);
+  return {
+    stream: Readable.fromWeb(response.body as unknown as WebReadableStream<Uint8Array>, {
+      highWaterMark: 1 << 25,
+    }),
+    mimeType: getAudioMimeType(audioUrl, response.headers.get("content-type")),
+  };
 }
 
 export async function getYouTubeAudioUrl(url: string): Promise<string> {
   const output = await youtubeDl(normalizeYouTubeWatchUrl(url), {
     getUrl: true,
-    format: "bestaudio/best",
+    format: "bestaudio[ext=webm]/bestaudio[acodec=opus]/bestaudio/best",
     noPlaylist: true,
     noWarnings: true,
     jsRuntimes: "node",
@@ -63,6 +78,11 @@ export async function getYouTubeAudioUrl(url: string): Promise<string> {
   }
 
   return audioUrl;
+}
+
+function getAudioMimeType(audioUrl: string, headerMimeType: string | null): string | undefined {
+  const urlMimeType = new URL(audioUrl).searchParams.get("mime");
+  return urlMimeType ? decodeURIComponent(urlMimeType) : (headerMimeType ?? undefined);
 }
 
 export function normalizeYouTubeWatchUrl(value: string): string {

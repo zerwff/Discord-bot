@@ -4,8 +4,9 @@ import { loadConfig } from "./config.js";
 
 const config = loadConfig();
 const rest = new REST({ version: "10" }).setToken(config.DISCORD_TOKEN);
+const deployGlobally = process.argv.includes("--global");
 
-if (config.DISCORD_GUILD_ID) {
+if (!deployGlobally && config.DISCORD_GUILD_ID) {
   await rest.put(Routes.applicationGuildCommands(config.DISCORD_CLIENT_ID, config.DISCORD_GUILD_ID), {
     body: commandData,
   });

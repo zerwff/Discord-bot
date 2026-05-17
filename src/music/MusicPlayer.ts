@@ -1,6 +1,7 @@
 import {
   AudioPlayerStatus,
   NoSubscriberBehavior,
+  StreamType,
   VoiceConnectionStatus,
   createAudioPlayer,
   createAudioResource,
@@ -448,8 +449,9 @@ export class MusicPlayer {
     queue.current = currentTrack;
 
     try {
-      const stream = await createYouTubeAudioStream(currentTrack.url);
-      const resource = createAudioResource(stream, {
+      const audio = await createYouTubeAudioStream(currentTrack.url);
+      const resource = createAudioResource(audio.stream, {
+        inputType: this.getAudioInputType(audio.mimeType),
         metadata: currentTrack,
       });
 
@@ -817,6 +819,10 @@ export class MusicPlayer {
       default:
         return "대기 중";
     }
+  }
+
+  private getAudioInputType(mimeType?: string): StreamType {
+    return mimeType?.includes("webm") ? StreamType.WebmOpus : StreamType.Arbitrary;
   }
 
   private toTrack(video: YouTubeVideo, requestedBy: Snowflake): Track {

@@ -33,6 +33,11 @@ YOUTUBE_COOKIE=
 ```
 
 `DISCORD_GUILD_ID`를 설정하면 slash command가 해당 서버에만 빠르게 등록됩니다. 비워두면 전역 command로 등록됩니다.
+테스트 서버 ID를 유지한 상태로 전역 command를 등록하려면 아래 명령을 사용하세요.
+
+```bash
+npm run deploy:commands:global
+```
 
 클라우드 서버에서 YouTube가 `Sign in to confirm you’re not a bot` 검증을 요구하면 `YOUTUBE_COOKIE`에 로그인된 YouTube 세션의 cookie 문자열을 넣어야 재생할 수 있습니다. 이 값은 비밀번호처럼 취급하고 저장소에 커밋하지 마세요.
 
