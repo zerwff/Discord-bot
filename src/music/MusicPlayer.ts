@@ -46,7 +46,6 @@ const MUSIC_CONTROLS = {
   stop: `${MUSIC_PREFIX}stop`,
   queue: `${MUSIC_PREFIX}queue`,
   nowPlaying: `${MUSIC_PREFIX}nowplaying`,
-  preview: `${MUSIC_PREFIX}preview`,
   leave: `${MUSIC_PREFIX}leave`,
 } as const;
 
@@ -121,9 +120,6 @@ export class MusicPlayer {
         break;
       case MUSIC_CONTROLS.nowPlaying:
         await this.nowPlaying(interaction);
-        break;
-      case MUSIC_CONTROLS.preview:
-        await this.preview(interaction);
         break;
       case MUSIC_CONTROLS.leave:
         await this.leave(interaction);
@@ -257,31 +253,6 @@ export class MusicPlayer {
       description: "음성 채널에서 나갔습니다.",
       status: "연결 종료",
       includeControls: false,
-    });
-  }
-
-  async preview(interaction: CachedButtonInteraction): Promise<void> {
-    const queue = this.requireQueue(interaction.guildId);
-    const track = queue.current;
-
-    if (!track?.thumbnailUrl) {
-      await interaction.reply({
-        content: "표시할 미리보기 이미지가 없습니다.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    await interaction.reply({
-      embeds: [
-        new EmbedBuilder()
-          .setColor(MUSIC_COLOR)
-          .setTitle("미리보기")
-          .setDescription(this.describeTrackTitle(track))
-          .setImage(track.thumbnailUrl),
-      ],
-      flags: MessageFlags.Ephemeral,
-      allowedMentions: { parse: [] },
     });
   }
 
@@ -662,7 +633,7 @@ export class MusicPlayer {
       .setTimestamp();
 
     if (featuredTrack?.thumbnailUrl) {
-      embed.setThumbnail(featuredTrack.thumbnailUrl);
+      embed.setImage(featuredTrack.thumbnailUrl);
     }
 
     return embed;
@@ -686,37 +657,25 @@ export class MusicPlayer {
     return [
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.resume)
+          .setLabel("재생")
+          .setEmoji("▶️")
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.pause)
           .setLabel("일시정지")
           .setEmoji("⏸️")
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId(MUSIC_CONTROLS.skip)
-          .setLabel("건너뛰기")
-          .setEmoji("⏭️")
-          .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-          .setCustomId(MUSIC_CONTROLS.stop)
-          .setLabel("정지")
-          .setEmoji("⏹️")
-          .setStyle(ButtonStyle.Danger),
-      ),
-      new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder()
-          .setCustomId(MUSIC_CONTROLS.preview)
-          .setLabel("미리보기")
-          .setEmoji("🖼️")
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId(MUSIC_CONTROLS.nowPlaying)
-          .setLabel("현재곡")
-          .setEmoji("🎧")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.leave)
           .setLabel("나가기")
           .setEmoji("👋")
           .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.skip)
+          .setLabel("건너뛰기")
+          .setEmoji("⏭️")
+          .setStyle(ButtonStyle.Primary),
       ),
     ];
   }
