@@ -650,7 +650,7 @@ export class MusicPlayer {
       {
         name: "[ 곡 정보 ]",
         value: track
-          ? `${this.describeTrackTitle(track)}\n신청자: <@${track.requestedBy}> • 길이: \`${track.duration}\``
+          ? `${this.describeTrackTitle(track)}\n신청자: <@${track.requestedBy}> • 길이: ${track.duration}`
           : "-",
       },
     ];
