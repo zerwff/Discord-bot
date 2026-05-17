@@ -82,7 +82,7 @@ interface MusicEmbedOptions {
   includeQueuePreview?: boolean;
   includeControls?: boolean;
   ephemeral?: boolean;
-  layout?: "queueAdded";
+  layout?: "queueAdded" | "finished";
 }
 
 class BotError extends Error {
@@ -406,10 +406,11 @@ export class MusicPlayer {
 
     if (!nextTrack) {
       await this.notifyEmbed(queue, {
-        title: "대기열 종료",
-        description: "대기열이 끝났습니다. 음성 채널에서 나갑니다.",
+        title: "재생이 종료되었습니다.",
+        description: "대기열이 모두 끝났습니다. 음성 채널에서 나갑니다.",
         status: "완료",
         includeControls: false,
+        layout: "finished",
       });
       this.destroyQueue(queue.guildId);
       return;
@@ -602,6 +603,10 @@ export class MusicPlayer {
       return this.createQueueAddedEmbed(options);
     }
 
+    if (options.layout === "finished") {
+      return this.createFinishedEmbed(options);
+    }
+
     const fields: APIEmbedField[] = [];
     const featuredTrack = options.highlightedTrack ?? options.currentTrack;
     const status = options.status ?? "대기 중";
@@ -667,6 +672,16 @@ export class MusicPlayer {
     return embed;
   }
 
+  private createFinishedEmbed(options: MusicEmbedOptions): EmbedBuilder {
+    return new EmbedBuilder()
+      .setColor(MUSIC_COLOR)
+      .setTitle(options.title)
+      .setDescription(options.description)
+      .setFooter({
+        text: `상태: ${options.status ?? "완료"} • ${this.formatFooterDate(new Date())}`,
+      });
+  }
+
   private createInlineInfoFields(options: MusicEmbedOptions, featuredTrack?: Track): APIEmbedField[] {
     return [
       {
@@ -709,24 +724,24 @@ export class MusicPlayer {
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.resume)
-          .setLabel("재생")
           .setEmoji("▶️")
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.pause)
-          .setLabel("일시정지")
           .setEmoji("⏸️")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-          .setCustomId(MUSIC_CONTROLS.leave)
-          .setLabel("나가기")
-          .setEmoji("👋")
-          .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.skip)
-          .setLabel("건너뛰기")
           .setEmoji("⏭️")
           .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.queue)
+          .setEmoji("📜")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.leave)
+          .setEmoji("👋")
+          .setStyle(ButtonStyle.Secondary),
       ),
     ];
   }
