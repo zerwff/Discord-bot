@@ -81,6 +81,7 @@ interface MusicEmbedOptions {
   includeQueuePreview?: boolean;
   includeControls?: boolean;
   ephemeral?: boolean;
+  layout?: "queueAdded";
 }
 
 class BotError extends Error {
@@ -155,6 +156,8 @@ export class MusicPlayer {
       description,
       highlightedTrack: shouldStart && queue.current ? queue.current : tracks[0],
       status: shouldStart && queue.current ? "재생 중" : undefined,
+      includeControls: shouldStart ? undefined : false,
+      layout: shouldStart ? undefined : "queueAdded",
     });
   }
 
@@ -594,6 +597,10 @@ export class MusicPlayer {
   }
 
   private createMusicEmbed(options: MusicEmbedOptions): EmbedBuilder {
+    if (options.layout === "queueAdded") {
+      return this.createQueueAddedEmbed(options);
+    }
+
     const fields: APIEmbedField[] = [];
     const featuredTrack = options.highlightedTrack ?? options.currentTrack;
     const status = options.status ?? "대기 중";
@@ -631,6 +638,38 @@ export class MusicPlayer {
 
     if (featuredTrack?.thumbnailUrl) {
       embed.setImage(featuredTrack.thumbnailUrl);
+    }
+
+    return embed;
+  }
+
+  private createQueueAddedEmbed(options: MusicEmbedOptions): EmbedBuilder {
+    const track = options.highlightedTrack ?? options.currentTrack;
+    const fields: APIEmbedField[] = [
+      {
+        name: "[ 곡 정보 ]",
+        value: track ? this.describeTrackTitle(track) : "-",
+        inline: true,
+      },
+      {
+        name: "[ 신청자 ]",
+        value: track ? `<@${track.requestedBy}>` : "-",
+        inline: true,
+      },
+      {
+        name: "[ 길이 ]",
+        value: track?.duration ?? "-",
+        inline: true,
+      },
+    ];
+
+    const embed = new EmbedBuilder()
+      .setColor(MUSIC_COLOR)
+      .setTitle("대기열에 추가됨")
+      .addFields(fields);
+
+    if (track?.thumbnailUrl) {
+      embed.setThumbnail(track.thumbnailUrl);
     }
 
     return embed;
