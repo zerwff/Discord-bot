@@ -36,6 +36,10 @@ import { createYouTubeAudioStream, isYouTubeBotCheck, normalizeYouTubeWatchUrl }
 type CachedCommandInteraction = ChatInputCommandInteraction<"cached">;
 type CachedButtonInteraction = ButtonInteraction<"cached">;
 type CachedMusicInteraction = CachedCommandInteraction | CachedButtonInteraction;
+type PlayNextOptions = {
+  announceStart?: boolean;
+  onStarted?: (queue: GuildMusicQueue, track: Track) => Promise<void>;
+};
 
 const MUSIC_COLOR = 0x22c55e;
 const QUEUE_ADDED_COLOR = MUSIC_COLOR;
@@ -145,7 +149,23 @@ export class MusicPlayer {
     queue.tracks.push(...tracks);
 
     if (shouldStart) {
-      void this.playNext(queue, { announceStart: false });
+      void this.playNext(queue, {
+        announceStart: false,
+        onStarted: async (startedQueue, startedTrack) => {
+          await interaction
+            .editReply(
+              this.toInteractionPayload(
+                this.queueEmbedOptions(startedQueue, {
+                  title: "현재 재생 중",
+                  description,
+                  highlightedTrack: startedTrack,
+                  status: "재생 중",
+                }),
+              ),
+            )
+            .catch(() => undefined);
+        },
+      });
     }
 
     const description =
@@ -426,7 +446,7 @@ export class MusicPlayer {
     });
   }
 
-  private async playNext(queue: GuildMusicQueue, options: { announceStart?: boolean } = {}): Promise<void> {
+  private async playNext(queue: GuildMusicQueue, options: PlayNextOptions = {}): Promise<void> {
     if (this.queues.get(queue.guildId) !== queue) {
       return;
     }
@@ -458,6 +478,10 @@ export class MusicPlayer {
       queue.player.play(resource);
       await entersState(queue.player, AudioPlayerStatus.Playing, 15_000);
       currentTrack.startedAt = new Date();
+      if (options.onStarted) {
+        await options.onStarted(queue, currentTrack).catch(() => undefined);
+      }
+
       if (options.announceStart !== false) {
         await this.notifyWithQueue(queue, {
           title: "현재 재생 중",
@@ -759,7 +783,7 @@ export class MusicPlayer {
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.pause)
           .setEmoji("⏸️")
-          .setStyle(ButtonStyle.Secondary),
+          .setStyle(ButtonStyle.Danger),
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.skip)
           .setEmoji("⏭️")
