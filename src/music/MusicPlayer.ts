@@ -589,52 +589,37 @@ export class MusicPlayer {
   private createMusicEmbed(options: MusicEmbedOptions): EmbedBuilder {
     const fields: APIEmbedField[] = [];
     const featuredTrack = options.highlightedTrack ?? options.currentTrack;
+    const status = options.status ?? "대기 중";
 
     if (featuredTrack) {
       fields.push({
-        name: "곡 정보",
-        value: this.describeTrack(featuredTrack),
+        name: "[ 곡 정보 ]",
+        value: `${this.describeTrackTitle(featuredTrack)}\n길이: \`${featuredTrack.duration}\``,
       });
-      fields.push(
-        {
-          name: "길이",
-          value: featuredTrack.duration,
-          inline: true,
-        },
-        {
-          name: "신청자",
-          value: `<@${featuredTrack.requestedBy}>`,
-          inline: true,
-        },
-      );
+    }
+
+    fields.push({
+      name: "[ 정보 ]",
+      value: this.formatPlayerInfo(status, options),
+    });
+
+    if (featuredTrack) {
+      fields.push({
+        name: "[ 신청자 ]",
+        value: `<@${featuredTrack.requestedBy}>`,
+      });
     }
 
     if (options.currentTrack && options.highlightedTrack && options.currentTrack.url !== options.highlightedTrack.url) {
       fields.push({
-        name: "현재 재생 중",
-        value: this.describeTrack(options.currentTrack),
-      });
-    }
-
-    if (typeof options.queueLength === "number") {
-      fields.push({
-        name: "대기열",
-        value: `${options.queueLength}곡 대기 중`,
-        inline: true,
-      });
-    }
-
-    if (options.voiceChannelId) {
-      fields.push({
-        name: "음성 채널",
-        value: `<#${options.voiceChannelId}>`,
-        inline: true,
+        name: "[ 현재 재생 중 ]",
+        value: this.describeTrackTitle(options.currentTrack),
       });
     }
 
     if (options.queuePreview) {
       fields.push({
-        name: "다음 곡",
+        name: "[ 다음 곡 ]",
         value: this.formatQueuePreview(options.queuePreview),
       });
     }
@@ -642,10 +627,10 @@ export class MusicPlayer {
     const embed = new EmbedBuilder()
       .setColor(MUSIC_COLOR)
       .setAuthor({ name: MUSIC_PLAYER_NAME })
-      .setTitle(options.title)
-      .setDescription(options.description)
+      .setTitle("（＠・へ・＠）")
+      .setDescription(`**${options.title}**\n${options.description}`)
       .addFields(fields)
-      .setFooter({ text: `상태: ${options.status ?? "대기 중"}` })
+      .setFooter({ text: `상태: ${status}` })
       .setTimestamp();
 
     if (featuredTrack?.thumbnailUrl) {
@@ -653,6 +638,20 @@ export class MusicPlayer {
     }
 
     return embed;
+  }
+
+  private formatPlayerInfo(status: string, options: MusicEmbedOptions): string {
+    const lines = [`상태: **${status}**`];
+
+    if (options.voiceChannelId) {
+      lines.push(`채널: <#${options.voiceChannelId}>`);
+    }
+
+    if (typeof options.queueLength === "number") {
+      lines.push(`대기열: ${options.queueLength}곡`);
+    }
+
+    return lines.join("\n");
   }
 
   private createControlRows(): ActionRowBuilder<ButtonBuilder>[] {
@@ -740,8 +739,12 @@ export class MusicPlayer {
   }
 
   private describeTrack(track: Track): string {
+    return `${this.describeTrackTitle(track)} (${track.duration}) - <@${track.requestedBy}>`;
+  }
+
+  private describeTrackTitle(track: Track): string {
     const title = escapeMarkdown(truncate(track.title, 80));
-    return `[${title}](${track.url}) (${track.duration}) - <@${track.requestedBy}>`;
+    return `[${title}](${track.url})`;
   }
 
   private isProbablyUrl(value: string): boolean {
