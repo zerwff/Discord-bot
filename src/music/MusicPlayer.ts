@@ -56,6 +56,7 @@ interface Track {
   durationInSec: number;
   requestedBy: Snowflake;
   thumbnailUrl?: string;
+  startedAt?: Date;
 }
 
 interface GuildMusicQueue {
@@ -408,20 +409,22 @@ export class MusicPlayer {
       return;
     }
 
-    queue.current = nextTrack;
+    const currentTrack: Track = { ...nextTrack };
+    queue.current = currentTrack;
 
     try {
-      const stream = await createYouTubeAudioStream(nextTrack.url);
+      const stream = await createYouTubeAudioStream(currentTrack.url);
       const resource = createAudioResource(stream, {
-        metadata: nextTrack,
+        metadata: currentTrack,
       });
 
       queue.player.play(resource);
       await entersState(queue.player, AudioPlayerStatus.Playing, 15_000);
+      currentTrack.startedAt = new Date();
       await this.notifyWithQueue(queue, {
         title: "현재 재생 중",
         description: "재생을 시작합니다.",
-        highlightedTrack: nextTrack,
+        highlightedTrack: currentTrack,
         status: "재생 중",
       });
     } catch (error) {
@@ -429,7 +432,7 @@ export class MusicPlayer {
       await this.notifyEmbed(queue, {
         title: "재생 실패",
         description: this.toPlaybackError(error).message,
-        highlightedTrack: nextTrack,
+        highlightedTrack: currentTrack,
         status: "실패",
         includeControls: false,
       });
@@ -589,7 +592,6 @@ export class MusicPlayer {
   private createMusicEmbed(options: MusicEmbedOptions): EmbedBuilder {
     const fields: APIEmbedField[] = [];
     const featuredTrack = options.highlightedTrack ?? options.currentTrack;
-    const status = options.status ?? "대기 중";
     if (featuredTrack) {
       fields.push({
         name: "[ 곡 정보 ]",
@@ -617,8 +619,7 @@ export class MusicPlayer {
       .setColor(MUSIC_COLOR)
       .setTitle(MUSIC_PLAYER_NAME)
       .addFields(fields)
-      .setFooter({ text: `상태: ${status}` })
-      .setTimestamp();
+      .setFooter({ text: `재생 시작: ${this.formatFooterDate(featuredTrack?.startedAt ?? new Date())}` });
 
     if (featuredTrack?.thumbnailUrl) {
       embed.setImage(featuredTrack.thumbnailUrl);
@@ -645,6 +646,18 @@ export class MusicPlayer {
         inline: true,
       },
     ];
+  }
+
+  private formatFooterDate(date: Date): string {
+    return new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(date);
   }
 
   private createControlRows(): ActionRowBuilder<ButtonBuilder>[] {
