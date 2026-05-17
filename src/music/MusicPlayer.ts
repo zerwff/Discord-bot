@@ -57,6 +57,7 @@ interface Track {
   durationInSec: number;
   requestedBy: Snowflake;
   thumbnailUrl?: string;
+  startedAt?: Date;
 }
 
 interface GuildMusicQueue {
@@ -425,6 +426,7 @@ export class MusicPlayer {
 
       queue.player.play(resource);
       await entersState(queue.player, AudioPlayerStatus.Playing, 15_000);
+      currentTrack.startedAt = new Date();
       if (options.announceStart !== false) {
         await this.notifyWithQueue(queue, {
           title: "현재 재생 중",
@@ -631,7 +633,9 @@ export class MusicPlayer {
       .setColor(MUSIC_COLOR)
       .setTitle(MUSIC_PLAYER_NAME)
       .addFields(fields)
-      .setFooter({ text: `상태: ${status}` });
+      .setFooter({
+        text: `상태: ${status} • ${this.formatFooterDate(featuredTrack?.startedAt ?? new Date())}`,
+      });
 
     if (featuredTrack?.thumbnailUrl) {
       embed.setImage(featuredTrack.thumbnailUrl);
@@ -681,6 +685,23 @@ export class MusicPlayer {
         inline: true,
       },
     ];
+  }
+
+  private formatFooterDate(date: Date): string {
+    const parts = new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    }).formatToParts(date);
+    const getPart = (type: Intl.DateTimeFormatPartTypes): string =>
+      parts.find((part) => part.type === type)?.value ?? "";
+    const dayPeriod = getPart("dayPeriod").replace("AM", "오전").replace("PM", "오후");
+
+    return `${getPart("year")}.${getPart("month")}.${getPart("day")} • ${dayPeriod} ${getPart("hour")}:${getPart("minute")}`;
   }
 
   private createControlRows(): ActionRowBuilder<ButtonBuilder>[] {
