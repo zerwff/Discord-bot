@@ -624,8 +624,8 @@ export class MusicPlayer {
 
     if (options.queuePreview) {
       fields.push({
-        name: "[ 다음 곡 ]",
-        value: this.formatQueuePreview(options.queuePreview),
+        name: "\u200b",
+        value: `**[ 다음 곡 ]**\n${this.formatQueuePreview(options.queuePreview)}`,
       });
     }
 
