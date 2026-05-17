@@ -31,7 +31,14 @@ import {
 } from "discord.js";
 import play, { type YouTubeVideo } from "play-dl";
 import { formatDuration, truncate } from "../utils/format.js";
-import { createYouTubeAudioStream, isYouTubeBotCheck, normalizeYouTubeWatchUrl } from "../youtube.js";
+import {
+  fetchYouTubePlaylistVideos,
+  createYouTubeAudioStream,
+  isYouTubeBotCheck,
+  isYouTubePlaylistUrl,
+  normalizeYouTubeWatchUrl,
+  type YouTubePlaylistVideo,
+} from "../youtube.js";
 
 type CachedCommandInteraction = ChatInputCommandInteraction<"cached">;
 type CachedButtonInteraction = ButtonInteraction<"cached">;
@@ -325,15 +332,14 @@ export class MusicPlayer {
         return [this.toTrack(info.video_details, requestedBy)];
       }
 
-      if (validation === "yt_playlist") {
-        const playlist = await play.playlist_info(query, { incomplete: true });
-        const videos = await playlist.next(this.maxPlaylistSize);
+      if (validation === "yt_playlist" || isYouTubePlaylistUrl(query)) {
+        const videos = await fetchYouTubePlaylistVideos(query, this.maxPlaylistSize);
 
         if (videos.length === 0) {
           throw new BotError("재생할 수 있는 플레이리스트 영상을 찾지 못했습니다.");
         }
 
-        return videos.map((video) => this.toTrack(video, requestedBy));
+        return videos.map((video) => this.toTrackFromPlaylist(video, requestedBy));
       }
 
       if (this.isProbablyUrl(query)) {
@@ -857,6 +863,17 @@ export class MusicPlayer {
       durationInSec: video.durationInSec,
       requestedBy,
       thumbnailUrl: this.getThumbnailUrl(video),
+    };
+  }
+
+  private toTrackFromPlaylist(video: YouTubePlaylistVideo, requestedBy: Snowflake): Track {
+    return {
+      title: video.title,
+      url: normalizeYouTubeWatchUrl(video.url),
+      duration: formatDuration(video.durationInSec),
+      durationInSec: video.durationInSec ?? 0,
+      requestedBy,
+      thumbnailUrl: video.thumbnailUrl,
     };
   }
 

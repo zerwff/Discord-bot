@@ -33,6 +33,13 @@ export interface YouTubeAudioStream {
   mimeType?: string;
 }
 
+export interface YouTubePlaylistVideo {
+  title: string;
+  url: string;
+  durationInSec?: number;
+  thumbnailUrl?: string;
+}
+
 export async function createYouTubeAudioStream(url: string): Promise<YouTubeAudioStream> {
   const audioUrl = await getYouTubeAudioUrl(url);
   const response = await fetch(audioUrl, {
@@ -80,6 +87,26 @@ export async function getYouTubeAudioUrl(url: string): Promise<string> {
   return audioUrl;
 }
 
+export async function fetchYouTubePlaylistVideos(url: string, maxVideos: number): Promise<YouTubePlaylistVideo[]> {
+  const output = await youtubeDl(url, {
+    dumpSingleJson: true,
+    flatPlaylist: true,
+    playlistEnd: maxVideos,
+    noWarnings: true,
+    jsRuntimes: "node",
+    ...(youtubeCookieFile ? { cookies: youtubeCookieFile } : {}),
+  });
+
+  if (!isPlaylistPayload(output)) {
+    throw new Error("yt-dlp did not return playlist entries");
+  }
+
+  return output.entries
+    .map(toPlaylistVideo)
+    .filter((video): video is YouTubePlaylistVideo => Boolean(video))
+    .slice(0, maxVideos);
+}
+
 function getAudioMimeType(audioUrl: string, headerMimeType: string | null): string | undefined {
   const urlMimeType = new URL(audioUrl).searchParams.get("mime");
   return urlMimeType ? decodeURIComponent(urlMimeType) : (headerMimeType ?? undefined);
@@ -94,6 +121,15 @@ export function normalizeYouTubeWatchUrl(value: string): string {
   }
 
   return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+export function isYouTubePlaylistUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return /(^|\.)youtube\.com$/.test(url.hostname) && Boolean(url.searchParams.get("list"));
+  } catch {
+    return false;
+  }
 }
 
 export function parseCookieHeader(cookieHeader: string): Cookie[] {
@@ -122,6 +158,61 @@ interface Cookie {
   domain: string;
   path: string;
   secure: boolean;
+}
+
+interface PlaylistPayload {
+  entries: PlaylistEntry[];
+}
+
+interface PlaylistEntry {
+  id?: string;
+  title?: string;
+  url?: string;
+  webpage_url?: string;
+  duration?: number;
+  duration_string?: string;
+  thumbnails?: Array<{ url?: string; width?: number }>;
+  thumbnail?: string;
+}
+
+function isPlaylistPayload(value: unknown): value is PlaylistPayload {
+  return typeof value === "object" && value !== null && Array.isArray((value as PlaylistPayload).entries);
+}
+
+function toPlaylistVideo(entry: PlaylistEntry): YouTubePlaylistVideo | undefined {
+  const url = normalizePlaylistEntryUrl(entry);
+
+  if (!url) {
+    return undefined;
+  }
+
+  return {
+    title: entry.title ?? "제목 없음",
+    url,
+    durationInSec: entry.duration,
+    thumbnailUrl: getPlaylistThumbnail(entry),
+  };
+}
+
+function normalizePlaylistEntryUrl(entry: PlaylistEntry): string | undefined {
+  if (entry.webpage_url) {
+    return normalizeYouTubeWatchUrl(entry.webpage_url);
+  }
+
+  if (entry.url?.startsWith("http")) {
+    return normalizeYouTubeWatchUrl(entry.url);
+  }
+
+  const videoId = entry.id ?? entry.url;
+  return videoId ? `https://www.youtube.com/watch?v=${videoId}` : undefined;
+}
+
+function getPlaylistThumbnail(entry: PlaylistEntry): string | undefined {
+  const thumbnail = entry.thumbnails
+    ?.filter((item) => item.url)
+    .sort((first, second) => (second.width ?? 0) - (first.width ?? 0))[0]?.url;
+
+  return thumbnail ?? entry.thumbnail;
 }
 
 function toNetscapeCookieFile(cookieHeader: string): string {
