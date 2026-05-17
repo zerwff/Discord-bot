@@ -37,7 +37,7 @@ type CachedButtonInteraction = ButtonInteraction<"cached">;
 type CachedMusicInteraction = CachedCommandInteraction | CachedButtonInteraction;
 
 const MUSIC_COLOR = 0x8b5cf6;
-const MUSIC_PLAYER_NAME = "（＠・へ・＠） 음악 플레이어";
+const MUSIC_PLAYER_NAME = "（＠・へ・＠）음악 플레이어";
 const MUSIC_PREFIX = "music:";
 const MUSIC_CONTROLS = {
   pause: `${MUSIC_PREFIX}pause`,
@@ -46,6 +46,7 @@ const MUSIC_CONTROLS = {
   stop: `${MUSIC_PREFIX}stop`,
   queue: `${MUSIC_PREFIX}queue`,
   nowPlaying: `${MUSIC_PREFIX}nowplaying`,
+  preview: `${MUSIC_PREFIX}preview`,
   leave: `${MUSIC_PREFIX}leave`,
 } as const;
 
@@ -120,6 +121,9 @@ export class MusicPlayer {
         break;
       case MUSIC_CONTROLS.nowPlaying:
         await this.nowPlaying(interaction);
+        break;
+      case MUSIC_CONTROLS.preview:
+        await this.preview(interaction);
         break;
       case MUSIC_CONTROLS.leave:
         await this.leave(interaction);
@@ -253,6 +257,31 @@ export class MusicPlayer {
       description: "음성 채널에서 나갔습니다.",
       status: "연결 종료",
       includeControls: false,
+    });
+  }
+
+  async preview(interaction: CachedButtonInteraction): Promise<void> {
+    const queue = this.requireQueue(interaction.guildId);
+    const track = queue.current;
+
+    if (!track?.thumbnailUrl) {
+      await interaction.reply({
+        content: "표시할 미리보기 이미지가 없습니다.",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(MUSIC_COLOR)
+          .setTitle("미리보기")
+          .setDescription(this.describeTrackTitle(track))
+          .setImage(track.thumbnailUrl),
+      ],
+      flags: MessageFlags.Ephemeral,
+      allowedMentions: { parse: [] },
     });
   }
 
@@ -626,8 +655,7 @@ export class MusicPlayer {
 
     const embed = new EmbedBuilder()
       .setColor(MUSIC_COLOR)
-      .setAuthor({ name: MUSIC_PLAYER_NAME })
-      .setTitle("（＠・へ・＠）")
+      .setTitle(MUSIC_PLAYER_NAME)
       .setDescription(`**${options.title}**\n${options.description}`)
       .addFields(fields)
       .setFooter({ text: `상태: ${status}` })
@@ -663,11 +691,6 @@ export class MusicPlayer {
           .setEmoji("⏸️")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-          .setCustomId(MUSIC_CONTROLS.resume)
-          .setLabel("재개")
-          .setEmoji("▶️")
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.skip)
           .setLabel("건너뛰기")
           .setEmoji("⏭️")
@@ -680,9 +703,9 @@ export class MusicPlayer {
       ),
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setCustomId(MUSIC_CONTROLS.queue)
-          .setLabel("대기열")
-          .setEmoji("📜")
+          .setCustomId(MUSIC_CONTROLS.preview)
+          .setLabel("미리보기")
+          .setEmoji("🖼️")
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId(MUSIC_CONTROLS.nowPlaying)
