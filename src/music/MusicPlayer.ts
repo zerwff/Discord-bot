@@ -144,7 +144,7 @@ export class MusicPlayer {
     queue.tracks.push(...tracks);
 
     if (shouldStart) {
-      await this.playNext(queue, { announceStart: false });
+      void this.playNext(queue, { announceStart: false });
     }
 
     const description =
@@ -155,8 +155,8 @@ export class MusicPlayer {
     await this.respondWithQueue(interaction, queue, {
       title: shouldStart ? "현재 재생 중" : "대기열에 추가되었습니다.",
       description,
-      highlightedTrack: shouldStart && queue.current ? queue.current : tracks[0],
-      status: shouldStart && queue.current ? "재생 중" : undefined,
+      highlightedTrack: tracks[0],
+      status: shouldStart ? "준비 중" : undefined,
       includeControls: shouldStart ? undefined : false,
       layout: shouldStart ? undefined : "queueAdded",
     });
