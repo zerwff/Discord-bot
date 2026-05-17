@@ -97,10 +97,9 @@ async function handleInteractionError(
   if (interaction.deferred || interaction.replied) {
     await interaction.editReply({ content: message, embeds: [], components: [] });
   } else if (interaction.isButton()) {
-    await interaction.update({
+    await interaction.reply({
       content: message,
-      embeds: [],
-      components: [],
+      flags: MessageFlags.Ephemeral,
       allowedMentions: { parse: [] },
     });
   } else {
