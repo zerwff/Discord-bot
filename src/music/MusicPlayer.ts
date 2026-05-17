@@ -622,7 +622,7 @@ export class MusicPlayer {
       .setTitle(MUSIC_PLAYER_NAME)
       .addFields(fields)
       .setFooter({
-        text: `상태: ${status} • 재생 시작: ${this.formatFooterDate(featuredTrack?.startedAt ?? new Date())}`,
+        text: `상태: ${status} • ${this.formatFooterDate(featuredTrack?.startedAt ?? new Date())}`,
       });
 
     if (featuredTrack?.thumbnailUrl) {
