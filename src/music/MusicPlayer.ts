@@ -11,11 +11,20 @@ import {
   type VoiceConnection,
 } from "@discordjs/voice";
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
   escapeMarkdown,
   MessageFlags,
   PermissionFlagsBits,
+  type APIEmbedField,
+  type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Client,
+  type InteractionEditReplyOptions,
+  type InteractionReplyOptions,
+  type MessageCreateOptions,
   type Snowflake,
   type VoiceBasedChannel,
 } from "discord.js";
@@ -24,6 +33,20 @@ import { formatDuration, truncate } from "../utils/format.js";
 import { createYouTubeAudioStream, isYouTubeBotCheck, normalizeYouTubeWatchUrl } from "../youtube.js";
 
 type CachedCommandInteraction = ChatInputCommandInteraction<"cached">;
+type CachedButtonInteraction = ButtonInteraction<"cached">;
+type CachedMusicInteraction = CachedCommandInteraction | CachedButtonInteraction;
+
+const MUSIC_COLOR = 0x8b5cf6;
+const MUSIC_PREFIX = "music:";
+const MUSIC_CONTROLS = {
+  pause: `${MUSIC_PREFIX}pause`,
+  resume: `${MUSIC_PREFIX}resume`,
+  skip: `${MUSIC_PREFIX}skip`,
+  stop: `${MUSIC_PREFIX}stop`,
+  queue: `${MUSIC_PREFIX}queue`,
+  nowPlaying: `${MUSIC_PREFIX}nowplaying`,
+  leave: `${MUSIC_PREFIX}leave`,
+} as const;
 
 interface Track {
   title: string;
@@ -43,6 +66,20 @@ interface GuildMusicQueue {
   current?: Track;
 }
 
+interface MusicEmbedOptions {
+  title: string;
+  description: string;
+  status?: string;
+  highlightedTrack?: Track;
+  currentTrack?: Track;
+  queueLength?: number;
+  queuePreview?: Track[];
+  voiceChannelId?: Snowflake;
+  includeQueuePreview?: boolean;
+  includeControls?: boolean;
+  ephemeral?: boolean;
+}
+
 class BotError extends Error {
   constructor(message: string) {
     super(message);
@@ -58,6 +95,38 @@ export class MusicPlayer {
     private readonly maxPlaylistSize: number,
   ) {}
 
+  isMusicButton(customId: string): boolean {
+    return customId.startsWith(MUSIC_PREFIX);
+  }
+
+  async handleButton(interaction: CachedButtonInteraction): Promise<void> {
+    switch (interaction.customId) {
+      case MUSIC_CONTROLS.pause:
+        await this.pause(interaction);
+        break;
+      case MUSIC_CONTROLS.resume:
+        await this.resume(interaction);
+        break;
+      case MUSIC_CONTROLS.skip:
+        await this.skip(interaction);
+        break;
+      case MUSIC_CONTROLS.stop:
+        await this.stop(interaction);
+        break;
+      case MUSIC_CONTROLS.queue:
+        await this.queue(interaction);
+        break;
+      case MUSIC_CONTROLS.nowPlaying:
+        await this.nowPlaying(interaction);
+        break;
+      case MUSIC_CONTROLS.leave:
+        await this.leave(interaction);
+        break;
+      default:
+        await this.respond(interaction, "알 수 없는 음악 버튼입니다.", true);
+    }
+  }
+
   async play(interaction: CachedCommandInteraction): Promise<void> {
     const query = interaction.options.getString("query", true);
     const voiceChannel = this.getMemberVoiceChannel(interaction);
@@ -72,15 +141,19 @@ export class MusicPlayer {
       void this.playNext(queue);
     }
 
-    const suffix =
+    const description =
       tracks.length === 1
-        ? `대기열에 추가했습니다: ${this.describeTrack(tracks[0])}`
+        ? "곡을 대기열에 추가했습니다."
         : `${tracks.length}곡을 대기열에 추가했습니다.`;
 
-    await interaction.editReply(suffix);
+    await this.respondWithQueue(interaction, queue, {
+      title: "Music Added",
+      description,
+      highlightedTrack: tracks[0],
+    });
   }
 
-  async skip(interaction: CachedCommandInteraction): Promise<void> {
+  async skip(interaction: CachedMusicInteraction): Promise<void> {
     const queue = this.requireQueue(interaction.guildId);
     this.ensureSameVoiceChannel(interaction, queue);
 
@@ -91,18 +164,27 @@ export class MusicPlayer {
 
     const skipped = queue.current;
     queue.player.stop(true);
-    await this.respond(interaction, `건너뜁니다: ${this.describeTrack(skipped)}`);
+    await this.respondWithQueue(interaction, queue, {
+      title: "Skipped",
+      description: "현재 곡을 건너뜁니다.",
+      highlightedTrack: skipped,
+    });
   }
 
-  async stop(interaction: CachedCommandInteraction): Promise<void> {
+  async stop(interaction: CachedMusicInteraction): Promise<void> {
     const queue = this.requireQueue(interaction.guildId);
     this.ensureSameVoiceChannel(interaction, queue);
     this.destroyQueue(interaction.guildId);
 
-    await this.respond(interaction, "재생을 멈추고 대기열을 비웠습니다.");
+    await this.respondEmbed(interaction, {
+      title: "Player Stopped",
+      description: "재생을 멈추고 대기열을 비웠습니다.",
+      status: "정지",
+      includeControls: false,
+    });
   }
 
-  async pause(interaction: CachedCommandInteraction): Promise<void> {
+  async pause(interaction: CachedMusicInteraction): Promise<void> {
     const queue = this.requireQueue(interaction.guildId);
     this.ensureSameVoiceChannel(interaction, queue);
 
@@ -111,10 +193,14 @@ export class MusicPlayer {
       return;
     }
 
-    await this.respond(interaction, "일시정지했습니다.");
+    await this.respondWithQueue(interaction, queue, {
+      title: "Paused",
+      description: "현재 곡을 일시정지했습니다.",
+      status: "일시정지",
+    });
   }
 
-  async resume(interaction: CachedCommandInteraction): Promise<void> {
+  async resume(interaction: CachedMusicInteraction): Promise<void> {
     const queue = this.requireQueue(interaction.guildId);
     this.ensureSameVoiceChannel(interaction, queue);
 
@@ -123,28 +209,24 @@ export class MusicPlayer {
       return;
     }
 
-    await this.respond(interaction, "다시 재생합니다.");
+    await this.respondWithQueue(interaction, queue, {
+      title: "Resumed",
+      description: "다시 재생합니다.",
+      status: "재생 중",
+    });
   }
 
-  async queue(interaction: CachedCommandInteraction): Promise<void> {
+  async queue(interaction: CachedMusicInteraction): Promise<void> {
     const queue = this.requireQueue(interaction.guildId);
-    const current = queue.current ? `현재 재생: ${this.describeTrack(queue.current)}` : "현재 재생 중인 곡이 없습니다.";
 
-    if (queue.tracks.length === 0) {
-      await this.respond(interaction, `${current}\n대기열이 비어 있습니다.`);
-      return;
-    }
-
-    const preview = queue.tracks
-      .slice(0, 10)
-      .map((track, index) => `${index + 1}. ${this.describeTrack(track)}`)
-      .join("\n");
-    const remaining = queue.tracks.length > 10 ? `\n...외 ${queue.tracks.length - 10}곡` : "";
-
-    await this.respond(interaction, `${current}\n\n대기열:\n${preview}${remaining}`);
+    await this.respondWithQueue(interaction, queue, {
+      title: "Music Queue",
+      description: queue.tracks.length === 0 ? "대기열이 비어 있습니다." : "다음 곡 목록입니다.",
+      includeQueuePreview: true,
+    });
   }
 
-  async nowPlaying(interaction: CachedCommandInteraction): Promise<void> {
+  async nowPlaying(interaction: CachedMusicInteraction): Promise<void> {
     const queue = this.requireQueue(interaction.guildId);
 
     if (!queue.current) {
@@ -152,15 +234,24 @@ export class MusicPlayer {
       return;
     }
 
-    await this.respond(interaction, `현재 재생: ${this.describeTrack(queue.current)}`);
+    await this.respondWithQueue(interaction, queue, {
+      title: "Now Playing",
+      description: "현재 재생 중인 곡입니다.",
+      highlightedTrack: queue.current,
+    });
   }
 
-  async leave(interaction: CachedCommandInteraction): Promise<void> {
+  async leave(interaction: CachedMusicInteraction): Promise<void> {
     const queue = this.requireQueue(interaction.guildId);
     this.ensureSameVoiceChannel(interaction, queue);
     this.destroyQueue(interaction.guildId);
 
-    await this.respond(interaction, "음성 채널에서 나갔습니다.");
+    await this.respondEmbed(interaction, {
+      title: "Disconnected",
+      description: "음성 채널에서 나갔습니다.",
+      status: "연결 종료",
+      includeControls: false,
+    });
   }
 
   isUserFacingError(error: unknown): error is BotError {
@@ -272,7 +363,13 @@ export class MusicPlayer {
       console.error("Audio player error:", error);
 
       if (failedTrack) {
-        void this.notify(queue, `재생 중 오류가 발생했습니다: ${this.describeTrack(failedTrack)}`);
+        void this.notifyEmbed(queue, {
+          title: "Playback Error",
+          description: "재생 중 오류가 발생했습니다.",
+          highlightedTrack: failedTrack,
+          status: "오류",
+          includeControls: false,
+        });
       }
 
       queue.current = undefined;
@@ -299,7 +396,12 @@ export class MusicPlayer {
     const nextTrack = queue.tracks.shift();
 
     if (!nextTrack) {
-      await this.notify(queue, "대기열이 끝났습니다. 음성 채널에서 나갑니다.");
+      await this.notifyEmbed(queue, {
+        title: "Queue Finished",
+        description: "대기열이 끝났습니다. 음성 채널에서 나갑니다.",
+        status: "완료",
+        includeControls: false,
+      });
       this.destroyQueue(queue.guildId);
       return;
     }
@@ -314,10 +416,21 @@ export class MusicPlayer {
 
       queue.player.play(resource);
       await entersState(queue.player, AudioPlayerStatus.Playing, 15_000);
-      await this.notify(queue, `재생 시작: ${this.describeTrack(nextTrack)}`);
+      await this.notifyWithQueue(queue, {
+        title: "Now Playing",
+        description: "재생을 시작합니다.",
+        highlightedTrack: nextTrack,
+        status: "재생 중",
+      });
     } catch (error) {
       console.error("Failed to play track:", error);
-      await this.notify(queue, `${this.toPlaybackError(error).message}: ${this.describeTrack(nextTrack)}`);
+      await this.notifyEmbed(queue, {
+        title: "Playback Failed",
+        description: this.toPlaybackError(error).message,
+        highlightedTrack: nextTrack,
+        status: "실패",
+        includeControls: false,
+      });
       queue.current = undefined;
       await this.playNext(queue);
     }
@@ -374,17 +487,17 @@ export class MusicPlayer {
     }
   }
 
-  private async notify(queue: GuildMusicQueue, content: string): Promise<void> {
+  private async notify(queue: GuildMusicQueue, options: MessageCreateOptions): Promise<void> {
     const channel = await this.client.channels.fetch(queue.textChannelId).catch(() => null);
 
     if (!channel?.isSendable()) {
       return;
     }
 
-    await channel.send({ content, allowedMentions: { parse: [] } }).catch(() => undefined);
+    await channel.send({ ...options, allowedMentions: { parse: [] } }).catch(() => undefined);
   }
 
-  private async respond(interaction: CachedCommandInteraction, content: string, ephemeral = false): Promise<void> {
+  private async respond(interaction: CachedMusicInteraction, content: string, ephemeral = false): Promise<void> {
     if (interaction.deferred || interaction.replied) {
       await interaction.editReply({ content });
       return;
@@ -395,6 +508,201 @@ export class MusicPlayer {
       flags: ephemeral ? MessageFlags.Ephemeral : undefined,
       allowedMentions: { parse: [] },
     });
+  }
+
+  private async respondWithQueue(
+    interaction: CachedMusicInteraction,
+    queue: GuildMusicQueue,
+    options: MusicEmbedOptions,
+  ): Promise<void> {
+    await this.respondEmbed(interaction, this.queueEmbedOptions(queue, options));
+  }
+
+  private async notifyWithQueue(queue: GuildMusicQueue, options: MusicEmbedOptions): Promise<void> {
+    await this.notifyEmbed(queue, this.queueEmbedOptions(queue, options));
+  }
+
+  private async respondEmbed(interaction: CachedMusicInteraction, options: MusicEmbedOptions): Promise<void> {
+    const payload = this.toInteractionPayload(options);
+
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply(payload);
+      return;
+    }
+
+    await interaction.reply({
+      ...payload,
+      flags: options.ephemeral ? MessageFlags.Ephemeral : undefined,
+    });
+  }
+
+  private async notifyEmbed(queue: GuildMusicQueue, options: MusicEmbedOptions): Promise<void> {
+    await this.notify(queue, this.toMessagePayload(options));
+  }
+
+  private queueEmbedOptions(queue: GuildMusicQueue, options: MusicEmbedOptions): MusicEmbedOptions {
+    return {
+      ...options,
+      currentTrack: queue.current,
+      queueLength: queue.tracks.length,
+      queuePreview: options.includeQueuePreview ? queue.tracks : undefined,
+      voiceChannelId: queue.voiceChannelId,
+      status: options.status ?? this.getQueueStatus(queue),
+    };
+  }
+
+  private toInteractionPayload(options: MusicEmbedOptions): InteractionReplyOptions & InteractionEditReplyOptions {
+    const payload = this.toMessagePayload(options);
+    return {
+      embeds: payload.embeds,
+      components: payload.components,
+      content: "",
+      allowedMentions: { parse: [] },
+    };
+  }
+
+  private toMessagePayload(options: MusicEmbedOptions): MessageCreateOptions {
+    return {
+      embeds: [this.createMusicEmbed(options)],
+      components: options.includeControls === false ? [] : this.createControlRows(),
+      allowedMentions: { parse: [] },
+    };
+  }
+
+  private createMusicEmbed(options: MusicEmbedOptions): EmbedBuilder {
+    const fields: APIEmbedField[] = [];
+    const featuredTrack = options.highlightedTrack ?? options.currentTrack;
+
+    if (featuredTrack) {
+      fields.push({
+        name: "Track",
+        value: this.describeTrack(featuredTrack),
+      });
+      fields.push(
+        {
+          name: "Duration",
+          value: featuredTrack.duration,
+          inline: true,
+        },
+        {
+          name: "Requested by",
+          value: `<@${featuredTrack.requestedBy}>`,
+          inline: true,
+        },
+      );
+    }
+
+    if (options.currentTrack && options.highlightedTrack && options.currentTrack.url !== options.highlightedTrack.url) {
+      fields.push({
+        name: "Now Playing",
+        value: this.describeTrack(options.currentTrack),
+      });
+    }
+
+    if (typeof options.queueLength === "number") {
+      fields.push({
+        name: "Queue",
+        value: `${options.queueLength}곡 대기 중`,
+        inline: true,
+      });
+    }
+
+    if (options.voiceChannelId) {
+      fields.push({
+        name: "Voice",
+        value: `<#${options.voiceChannelId}>`,
+        inline: true,
+      });
+    }
+
+    if (options.queuePreview) {
+      fields.push({
+        name: "Up Next",
+        value: this.formatQueuePreview(options.queuePreview),
+      });
+    }
+
+    return new EmbedBuilder()
+      .setColor(MUSIC_COLOR)
+      .setAuthor({ name: "Discord Music Player" })
+      .setTitle(options.title)
+      .setDescription(options.description)
+      .addFields(fields)
+      .setFooter({ text: `Status: ${options.status ?? "대기 중"}` })
+      .setTimestamp();
+  }
+
+  private createControlRows(): ActionRowBuilder<ButtonBuilder>[] {
+    return [
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.pause)
+          .setLabel("Pause")
+          .setEmoji("⏸️")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.resume)
+          .setLabel("Resume")
+          .setEmoji("▶️")
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.skip)
+          .setLabel("Skip")
+          .setEmoji("⏭️")
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.stop)
+          .setLabel("Stop")
+          .setEmoji("⏹️")
+          .setStyle(ButtonStyle.Danger),
+      ),
+      new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.queue)
+          .setLabel("Queue")
+          .setEmoji("📜")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.nowPlaying)
+          .setLabel("Now Playing")
+          .setEmoji("🎧")
+          .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId(MUSIC_CONTROLS.leave)
+          .setLabel("Leave")
+          .setEmoji("👋")
+          .setStyle(ButtonStyle.Secondary),
+      ),
+    ];
+  }
+
+  private formatQueuePreview(tracks: Track[]): string {
+    if (tracks.length === 0) {
+      return "대기열이 비어 있습니다.";
+    }
+
+    const preview = tracks
+      .slice(0, 10)
+      .map((track, index) => `**${index + 1}.** ${this.describeTrack(track)}`)
+      .join("\n");
+    const remaining = tracks.length > 10 ? `\n...외 ${tracks.length - 10}곡` : "";
+
+    return `${preview}${remaining}`;
+  }
+
+  private getQueueStatus(queue: GuildMusicQueue): string {
+    switch (queue.player.state.status) {
+      case AudioPlayerStatus.Playing:
+        return "재생 중";
+      case AudioPlayerStatus.Paused:
+        return "일시정지";
+      case AudioPlayerStatus.Buffering:
+        return "버퍼링";
+      case AudioPlayerStatus.AutoPaused:
+        return "자동 일시정지";
+      default:
+        return "대기 중";
+    }
   }
 
   private toTrack(video: YouTubeVideo, requestedBy: Snowflake): Track {

@@ -1,4 +1,4 @@
-import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
+import { Client, Events, GatewayIntentBits, MessageFlags, type ButtonInteraction, type ChatInputCommandInteraction } from "discord.js";
 import { loadConfig } from "./config.js";
 import { MusicPlayer } from "./music/MusicPlayer.js";
 import { configureYouTube } from "./youtube.js";
@@ -16,7 +16,7 @@ client.once(Events.ClientReady, (readyClient) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) {
+  if (!interaction.isChatInputCommand() && !interaction.isButton()) {
     return;
   }
 
@@ -29,6 +29,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   try {
+    if (interaction.isButton()) {
+      if (musicPlayer.isMusicButton(interaction.customId)) {
+        await musicPlayer.handleButton(interaction);
+      }
+
+      return;
+    }
+
     switch (interaction.commandName) {
       case "play":
         await musicPlayer.play(interaction);
@@ -61,23 +69,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
     }
   } catch (error) {
-    const message = musicPlayer.isUserFacingError(error)
-      ? error.message
-      : "명령어 처리 중 오류가 발생했습니다.";
-
-    if (!musicPlayer.isUserFacingError(error)) {
-      console.error("Unhandled interaction error:", error);
-    }
-
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ content: message });
-    } else {
-      await interaction.reply({
-        content: message,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
+    await handleInteractionError(interaction, error);
   }
 });
 
 await client.login(config.DISCORD_TOKEN);
+
+async function handleInteractionError(
+  interaction: ChatInputCommandInteraction<"cached"> | ButtonInteraction<"cached">,
+  error: unknown,
+): Promise<void> {
+  const message = musicPlayer.isUserFacingError(error)
+    ? error.message
+    : "명령어 처리 중 오류가 발생했습니다.";
+
+  if (!musicPlayer.isUserFacingError(error)) {
+    console.error("Unhandled interaction error:", error);
+  }
+
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply({ content: message, embeds: [], components: [] });
+  } else {
+    await interaction.reply({
+      content: message,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+}
