@@ -138,10 +138,11 @@ export class MusicPlayer {
 
     const tracks = await this.resolveTracks(query, interaction.user.id);
     const queue = await this.getOrCreateQueue(interaction, voiceChannel);
+    const shouldStart = queue.player.state.status === AudioPlayerStatus.Idle && !queue.current;
     queue.tracks.push(...tracks);
 
-    if (queue.player.state.status === AudioPlayerStatus.Idle && !queue.current) {
-      void this.playNext(queue);
+    if (shouldStart) {
+      await this.playNext(queue, { announceStart: false });
     }
 
     const description =
@@ -150,9 +151,10 @@ export class MusicPlayer {
         : `${tracks.length}곡을 대기열에 추가했습니다.`;
 
     await this.respondWithQueue(interaction, queue, {
-      title: "대기열에 추가됨",
+      title: shouldStart ? "현재 재생 중" : "대기열에 추가됨",
       description,
-      highlightedTrack: tracks[0],
+      highlightedTrack: shouldStart && queue.current ? queue.current : tracks[0],
+      status: shouldStart && queue.current ? "재생 중" : undefined,
     });
   }
 
@@ -391,7 +393,7 @@ export class MusicPlayer {
     });
   }
 
-  private async playNext(queue: GuildMusicQueue): Promise<void> {
+  private async playNext(queue: GuildMusicQueue, options: { announceStart?: boolean } = {}): Promise<void> {
     if (this.queues.get(queue.guildId) !== queue) {
       return;
     }
@@ -421,12 +423,14 @@ export class MusicPlayer {
       queue.player.play(resource);
       await entersState(queue.player, AudioPlayerStatus.Playing, 15_000);
       currentTrack.startedAt = new Date();
-      await this.notifyWithQueue(queue, {
-        title: "현재 재생 중",
-        description: "재생을 시작합니다.",
-        highlightedTrack: currentTrack,
-        status: "재생 중",
-      });
+      if (options.announceStart !== false) {
+        await this.notifyWithQueue(queue, {
+          title: "현재 재생 중",
+          description: "재생을 시작합니다.",
+          highlightedTrack: currentTrack,
+          status: "재생 중",
+        });
+      }
     } catch (error) {
       console.error("Failed to play track:", error);
       await this.notifyEmbed(queue, {
@@ -437,7 +441,7 @@ export class MusicPlayer {
         includeControls: false,
       });
       queue.current = undefined;
-      await this.playNext(queue);
+      await this.playNext(queue, options);
     }
   }
 
