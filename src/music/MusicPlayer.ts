@@ -36,8 +36,8 @@ type CachedCommandInteraction = ChatInputCommandInteraction<"cached">;
 type CachedButtonInteraction = ButtonInteraction<"cached">;
 type CachedMusicInteraction = CachedCommandInteraction | CachedButtonInteraction;
 
-const MUSIC_COLOR = 0x8b5cf6;
-const QUEUE_ADDED_COLOR = 0x22c55e;
+const MUSIC_COLOR = 0x22c55e;
+const QUEUE_ADDED_COLOR = MUSIC_COLOR;
 const MUSIC_PLAYER_NAME = "（＠・へ・＠）";
 const MUSIC_PREFIX = "music:";
 const MUSIC_CONTROLS = {
@@ -593,7 +593,7 @@ export class MusicPlayer {
   private toMessagePayload(options: MusicEmbedOptions): MessageCreateOptions {
     return {
       embeds: [this.createMusicEmbed(options)],
-      components: options.includeControls === false ? [] : this.createControlRows(),
+      components: this.getControlRows(options),
       allowedMentions: { parse: [] },
     };
   }
@@ -629,8 +629,8 @@ export class MusicPlayer {
 
     if (options.queuePreview) {
       fields.push({
-        name: "\u200b",
-        value: `**[ 다음 곡 ]**\n${this.formatQueuePreview(options.queuePreview)}`,
+        name: "[ 다음 곡 ]",
+        value: this.formatQueuePreview(options.queuePreview),
       });
     }
 
@@ -738,12 +738,28 @@ export class MusicPlayer {
           .setCustomId(MUSIC_CONTROLS.queue)
           .setEmoji("📜")
           .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-          .setCustomId(MUSIC_CONTROLS.leave)
-          .setEmoji("👋")
-          .setStyle(ButtonStyle.Secondary),
       ),
     ];
+  }
+
+  private createDisabledControlRows(): ActionRowBuilder<ButtonBuilder>[] {
+    return this.createControlRows().map((row) => {
+      const disabledRow = new ActionRowBuilder<ButtonBuilder>();
+      disabledRow.addComponents(row.components.map((button) => ButtonBuilder.from(button).setDisabled(true)));
+      return disabledRow;
+    });
+  }
+
+  private getControlRows(options: MusicEmbedOptions): ActionRowBuilder<ButtonBuilder>[] {
+    if (options.includeControls === false) {
+      return [];
+    }
+
+    if (options.layout === "finished") {
+      return this.createDisabledControlRows();
+    }
+
+    return this.createControlRows();
   }
 
   private formatQueuePreview(tracks: Track[]): string {
