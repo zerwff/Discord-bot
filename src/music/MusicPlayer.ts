@@ -462,7 +462,7 @@ export class MusicPlayer {
     return voiceChannel;
   }
 
-  private ensureSameVoiceChannel(interaction: CachedCommandInteraction, queue: GuildMusicQueue): void {
+  private ensureSameVoiceChannel(interaction: CachedMusicInteraction, queue: GuildMusicQueue): void {
     const voiceChannel = interaction.member.voice.channel;
 
     if (!voiceChannel || voiceChannel.id !== queue.voiceChannelId) {
