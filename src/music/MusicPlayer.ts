@@ -37,7 +37,7 @@ type CachedButtonInteraction = ButtonInteraction<"cached">;
 type CachedMusicInteraction = CachedCommandInteraction | CachedButtonInteraction;
 
 const MUSIC_COLOR = 0x8b5cf6;
-const MUSIC_PLAYER_NAME = "（＠・へ・＠）음악 플레이어";
+const MUSIC_PLAYER_NAME = "（＠・へ・＠）";
 const MUSIC_PREFIX = "music:";
 const MUSIC_CONTROLS = {
   pause: `${MUSIC_PREFIX}pause`,
@@ -594,21 +594,11 @@ export class MusicPlayer {
     if (featuredTrack) {
       fields.push({
         name: "[ 곡 정보 ]",
-        value: `${this.describeTrackTitle(featuredTrack)}\n길이: \`${featuredTrack.duration}\``,
+        value: this.describeTrackTitle(featuredTrack),
       });
     }
 
-    fields.push({
-      name: "[ 정보 ]",
-      value: this.formatPlayerInfo(status, options),
-    });
-
-    if (featuredTrack) {
-      fields.push({
-        name: "[ 신청자 ]",
-        value: `<@${featuredTrack.requestedBy}>`,
-      });
-    }
+    fields.push(...this.createInlineInfoFields(status, options, featuredTrack));
 
     if (options.currentTrack && options.highlightedTrack && options.currentTrack.url !== options.highlightedTrack.url) {
       fields.push({
@@ -627,7 +617,6 @@ export class MusicPlayer {
     const embed = new EmbedBuilder()
       .setColor(MUSIC_COLOR)
       .setTitle(MUSIC_PLAYER_NAME)
-      .setDescription(`**${options.title}**\n${options.description}`)
       .addFields(fields)
       .setFooter({ text: `상태: ${status}` })
       .setTimestamp();
@@ -639,18 +628,38 @@ export class MusicPlayer {
     return embed;
   }
 
-  private formatPlayerInfo(status: string, options: MusicEmbedOptions): string {
-    const lines = [`상태: **${status}**`];
-
-    if (options.voiceChannelId) {
-      lines.push(`채널: <#${options.voiceChannelId}>`);
-    }
-
-    if (typeof options.queueLength === "number") {
-      lines.push(`대기열: ${options.queueLength}곡`);
-    }
-
-    return lines.join("\n");
+  private createInlineInfoFields(
+    status: string,
+    options: MusicEmbedOptions,
+    featuredTrack?: Track,
+  ): APIEmbedField[] {
+    return [
+      {
+        name: "채널",
+        value: options.voiceChannelId ? `<#${options.voiceChannelId}>` : "-",
+        inline: true,
+      },
+      {
+        name: "길이",
+        value: featuredTrack?.duration ?? "-",
+        inline: true,
+      },
+      {
+        name: "대기열",
+        value: typeof options.queueLength === "number" ? `${options.queueLength}곡` : "-",
+        inline: true,
+      },
+      {
+        name: "신청자",
+        value: featuredTrack ? `<@${featuredTrack.requestedBy}>` : "-",
+        inline: true,
+      },
+      {
+        name: "상태",
+        value: status,
+        inline: true,
+      },
+    ];
   }
 
   private createControlRows(): ActionRowBuilder<ButtonBuilder>[] {
