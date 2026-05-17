@@ -589,6 +589,7 @@ export class MusicPlayer {
   private createMusicEmbed(options: MusicEmbedOptions): EmbedBuilder {
     const fields: APIEmbedField[] = [];
     const featuredTrack = options.highlightedTrack ?? options.currentTrack;
+    const status = options.status ?? "대기 중";
     if (featuredTrack) {
       fields.push({
         name: "[ 곡 정보 ]",
@@ -616,6 +617,7 @@ export class MusicPlayer {
       .setColor(MUSIC_COLOR)
       .setTitle(MUSIC_PLAYER_NAME)
       .addFields(fields)
+      .setFooter({ text: `상태: ${status}` })
       .setTimestamp();
 
     if (featuredTrack?.thumbnailUrl) {
@@ -633,13 +635,13 @@ export class MusicPlayer {
         inline: true,
       },
       {
-        name: "길이",
-        value: featuredTrack?.duration ?? "-",
+        name: "신청자",
+        value: featuredTrack ? `<@${featuredTrack.requestedBy}>` : "-",
         inline: true,
       },
       {
-        name: "신청자",
-        value: featuredTrack ? `<@${featuredTrack.requestedBy}>` : "-",
+        name: "길이",
+        value: featuredTrack?.duration ?? "-",
         inline: true,
       },
     ];
