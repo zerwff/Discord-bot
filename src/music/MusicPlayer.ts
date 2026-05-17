@@ -197,6 +197,20 @@ export class MusicPlayer {
     const queue = this.requireQueue(interaction.guildId);
     this.ensureSameVoiceChannel(interaction, queue);
 
+    if (!queue.current) {
+      await this.respond(interaction, "현재 재생 중인 곡이 없습니다.", true);
+      return;
+    }
+
+    if (queue.player.state.status === AudioPlayerStatus.Paused) {
+      await this.respondWithQueue(interaction, queue, {
+        title: "일시정지",
+        description: "이미 일시정지된 상태입니다.",
+        status: "일시정지",
+      });
+      return;
+    }
+
     if (queue.player.state.status !== AudioPlayerStatus.Playing || !queue.player.pause()) {
       await this.respond(interaction, "일시정지할 곡이 없습니다.", true);
       return;
@@ -212,6 +226,20 @@ export class MusicPlayer {
   async resume(interaction: CachedMusicInteraction): Promise<void> {
     const queue = this.requireQueue(interaction.guildId);
     this.ensureSameVoiceChannel(interaction, queue);
+
+    if (!queue.current) {
+      await this.respond(interaction, "현재 재생 중인 곡이 없습니다.", true);
+      return;
+    }
+
+    if (queue.player.state.status === AudioPlayerStatus.Playing) {
+      await this.respondWithQueue(interaction, queue, {
+        title: "재생 중",
+        description: "이미 재생 중입니다.",
+        status: "재생 중",
+      });
+      return;
+    }
 
     if (queue.player.state.status !== AudioPlayerStatus.Paused || !queue.player.unpause()) {
       await this.respond(interaction, "다시 재생할 일시정지 곡이 없습니다.", true);
