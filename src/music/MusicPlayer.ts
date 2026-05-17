@@ -94,7 +94,7 @@ interface MusicEmbedOptions {
   includeQueuePreview?: boolean;
   includeControls?: boolean;
   ephemeral?: boolean;
-  layout?: "queueAdded" | "finished";
+  layout?: "queueAdded" | "finished" | "statusOnly";
 }
 
 class BotError extends Error {
@@ -218,6 +218,7 @@ export class MusicPlayer {
       description: "재생을 멈추고 대기열을 비웠습니다.",
       status: "정지",
       includeControls: false,
+      layout: "statusOnly",
     });
   }
 
@@ -316,6 +317,7 @@ export class MusicPlayer {
       description: "음성 채널에서 나갔습니다.",
       status: "연결 종료",
       includeControls: false,
+      layout: "statusOnly",
     });
   }
 
@@ -667,6 +669,10 @@ export class MusicPlayer {
       return this.createFinishedEmbed(options);
     }
 
+    if (options.layout === "statusOnly") {
+      return this.createStatusOnlyEmbed(options);
+    }
+
     const fields: APIEmbedField[] = [];
     const featuredTrack = options.highlightedTrack ?? options.currentTrack;
     const status = options.status ?? "대기 중";
@@ -688,10 +694,7 @@ export class MusicPlayer {
     }
 
     if (options.queuePreview) {
-      fields.push({
-        name: "[ 다음 곡 ]",
-        value: this.formatQueuePreview(options.queuePreview),
-      });
+      fields.push(...this.createQueuePreviewFields(options.queuePreview));
     }
 
     const embed = new EmbedBuilder()
@@ -733,6 +736,16 @@ export class MusicPlayer {
   }
 
   private createFinishedEmbed(options: MusicEmbedOptions): EmbedBuilder {
+    return new EmbedBuilder()
+      .setColor(MUSIC_COLOR)
+      .setTitle(options.title)
+      .setDescription(options.description)
+      .setFooter({
+        text: `상태: ${options.status ?? "완료"} • ${this.formatFooterDate(new Date())}`,
+      });
+  }
+
+  private createStatusOnlyEmbed(options: MusicEmbedOptions): EmbedBuilder {
     return new EmbedBuilder()
       .setColor(MUSIC_COLOR)
       .setTitle(options.title)
@@ -822,18 +835,49 @@ export class MusicPlayer {
     return this.createControlRows();
   }
 
-  private formatQueuePreview(tracks: Track[]): string {
+  private createQueuePreviewFields(tracks: Track[]): APIEmbedField[] {
     if (tracks.length === 0) {
-      return "대기열이 비어 있습니다.";
+      return [
+        {
+          name: "[ 다음 곡 ]",
+          value: "대기열이 비어 있습니다.",
+        },
+      ];
     }
 
-    const preview = tracks
-      .slice(0, 10)
-      .map((track, index) => `**${index + 1}.** ${this.describeTrack(track)}`)
-      .join("\n");
-    const remaining = tracks.length > 10 ? `\n...외 ${tracks.length - 10}곡` : "";
+    const lines = tracks.slice(0, 100).map((track, index) => `**${index + 1}.** ${this.describeQueueTrack(track)}`);
+    const fields: APIEmbedField[] = [];
+    let current = "";
 
-    return `${preview}${remaining}`;
+    for (const line of lines) {
+      const next = current ? `${current}\n${line}` : line;
+
+      if (next.length > 900) {
+        fields.push({
+          name: fields.length === 0 ? "[ 다음 곡 ]" : "\u200b",
+          value: current,
+        });
+        current = line;
+      } else {
+        current = next;
+      }
+    }
+
+    if (current) {
+      fields.push({
+        name: fields.length === 0 ? "[ 다음 곡 ]" : "\u200b",
+        value: current,
+      });
+    }
+
+    if (tracks.length > 100) {
+      fields.push({
+        name: "\u200b",
+        value: `...외 ${tracks.length - 100}곡`,
+      });
+    }
+
+    return fields;
   }
 
   private getQueueStatus(queue: GuildMusicQueue): string {
@@ -884,6 +928,10 @@ export class MusicPlayer {
   private describeTrackTitle(track: Track): string {
     const title = escapeMarkdown(truncate(track.title, 80));
     return `[${title}](${track.url})`;
+  }
+
+  private describeQueueTrack(track: Track): string {
+    return `${escapeMarkdown(truncate(track.title, 32))} (${track.duration})`;
   }
 
   private isProbablyUrl(value: string): boolean {
