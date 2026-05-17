@@ -94,7 +94,7 @@ interface MusicEmbedOptions {
   includeQueuePreview?: boolean;
   includeControls?: boolean;
   ephemeral?: boolean;
-  layout?: "queueAdded" | "finished" | "statusOnly";
+  layout?: "queueAdded" | "finished" | "statusOnly" | "queueList";
 }
 
 class BotError extends Error {
@@ -289,6 +289,7 @@ export class MusicPlayer {
       title: "음악 대기열",
       description: queue.tracks.length === 0 ? "대기열이 비어 있습니다." : "다음 곡 목록입니다.",
       includeQueuePreview: true,
+      layout: "queueList",
     });
   }
 
@@ -673,6 +674,10 @@ export class MusicPlayer {
       return this.createStatusOnlyEmbed(options);
     }
 
+    if (options.layout === "queueList") {
+      return this.createQueueListEmbed(options);
+    }
+
     const fields: APIEmbedField[] = [];
     const featuredTrack = options.highlightedTrack ?? options.currentTrack;
     const status = options.status ?? "대기 중";
@@ -752,6 +757,18 @@ export class MusicPlayer {
       .setDescription(options.description)
       .setFooter({
         text: `상태: ${options.status ?? "완료"} • ${this.formatFooterDate(new Date())}`,
+      });
+  }
+
+  private createQueueListEmbed(options: MusicEmbedOptions): EmbedBuilder {
+    const tracks = options.queuePreview ?? [];
+
+    return new EmbedBuilder()
+      .setColor(MUSIC_COLOR)
+      .setTitle(options.title)
+      .setDescription(this.formatCompactQueueList(tracks))
+      .setFooter({
+        text: `상태: ${options.status ?? "대기 중"} • ${this.formatFooterDate(new Date())}`,
       });
   }
 
@@ -878,6 +895,20 @@ export class MusicPlayer {
     }
 
     return fields;
+  }
+
+  private formatCompactQueueList(tracks: Track[]): string {
+    if (tracks.length === 0) {
+      return "대기열이 비어 있습니다.";
+    }
+
+    const lines = tracks.slice(0, 100).map((track, index) => {
+      const title = escapeMarkdown(truncate(track.title, 24));
+      return `**${index + 1}.** ${title} (${track.duration})`;
+    });
+    const suffix = tracks.length > 100 ? `\n...외 ${tracks.length - 100}곡` : "";
+
+    return `**[ 다음 곡 ]**\n${lines.join("\n")}${suffix}`;
   }
 
   private getQueueStatus(queue: GuildMusicQueue): string {
