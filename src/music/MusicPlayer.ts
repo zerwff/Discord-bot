@@ -37,6 +37,7 @@ type CachedButtonInteraction = ButtonInteraction<"cached">;
 type CachedMusicInteraction = CachedCommandInteraction | CachedButtonInteraction;
 
 const MUSIC_COLOR = 0x8b5cf6;
+const QUEUE_ADDED_COLOR = 0x22c55e;
 const MUSIC_PLAYER_NAME = "（＠・へ・＠）";
 const MUSIC_PREFIX = "music:";
 const MUSIC_CONTROLS = {
@@ -152,7 +153,7 @@ export class MusicPlayer {
         : `${tracks.length}곡을 대기열에 추가했습니다.`;
 
     await this.respondWithQueue(interaction, queue, {
-      title: shouldStart ? "현재 재생 중" : "대기열에 추가됨",
+      title: shouldStart ? "현재 재생 중" : "대기열에 추가되었습니다.",
       description,
       highlightedTrack: shouldStart && queue.current ? queue.current : tracks[0],
       status: shouldStart && queue.current ? "재생 중" : undefined,
@@ -648,24 +649,15 @@ export class MusicPlayer {
     const fields: APIEmbedField[] = [
       {
         name: "[ 곡 정보 ]",
-        value: track ? this.describeTrackTitle(track) : "-",
-        inline: true,
-      },
-      {
-        name: "[ 신청자 ]",
-        value: track ? `<@${track.requestedBy}>` : "-",
-        inline: true,
-      },
-      {
-        name: "[ 길이 ]",
-        value: track?.duration ?? "-",
-        inline: true,
+        value: track
+          ? `${this.describeTrackTitle(track)}\n신청자: <@${track.requestedBy}>\n길이: \`${track.duration}\``
+          : "-",
       },
     ];
 
     const embed = new EmbedBuilder()
-      .setColor(MUSIC_COLOR)
-      .setTitle("대기열에 추가됨")
+      .setColor(QUEUE_ADDED_COLOR)
+      .setTitle("대기열에 추가되었습니다.")
       .addFields(fields);
 
     if (track?.thumbnailUrl) {
