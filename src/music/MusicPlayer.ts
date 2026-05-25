@@ -36,6 +36,7 @@ import {
   createYouTubeAudioStream,
   isYouTubeBotCheck,
   isYouTubePlaylistUrl,
+  isYouTubeRadioUrl,
   normalizeYouTubeWatchUrl,
   type YouTubePlaylistVideo,
 } from "../youtube.js";
@@ -329,6 +330,11 @@ export class MusicPlayer {
   private async resolveTracks(query: string, requestedBy: Snowflake): Promise<Track[]> {
     try {
       const validation = await play.validate(query);
+
+      if (isYouTubeRadioUrl(query)) {
+        const info = await play.video_basic_info(normalizeYouTubeWatchUrl(query));
+        return [this.toTrack(info.video_details, requestedBy)];
+      }
 
       if (validation === "yt_video") {
         const info = await play.video_basic_info(query);
@@ -903,7 +909,7 @@ export class MusicPlayer {
     }
 
     const lines = tracks.slice(0, 100).map((track, index) => {
-      const title = escapeMarkdown(truncate(track.title, 24));
+      const title = escapeMarkdown(truncate(this.normalizeDisplayText(track.title), 24));
       return `**${index + 1}.** ${title} (${track.duration})`;
     });
     const suffix = tracks.length > 100 ? `\n...외 ${tracks.length - 100}곡` : "";
@@ -957,12 +963,16 @@ export class MusicPlayer {
   }
 
   private describeTrackTitle(track: Track): string {
-    const title = escapeMarkdown(truncate(track.title, 80));
+    const title = escapeMarkdown(truncate(this.normalizeDisplayText(track.title), 80));
     return `[${title}](${track.url})`;
   }
 
   private describeQueueTrack(track: Track): string {
-    return `${escapeMarkdown(truncate(track.title, 32))} (${track.duration})`;
+    return `${escapeMarkdown(truncate(this.normalizeDisplayText(track.title), 32))} (${track.duration})`;
+  }
+
+  private normalizeDisplayText(value: string): string {
+    return value.replace(/\s+/g, " ").trim();
   }
 
   private isProbablyUrl(value: string): boolean {

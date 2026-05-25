@@ -126,10 +126,25 @@ export function normalizeYouTubeWatchUrl(value: string): string {
 export function isYouTubePlaylistUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return /(^|\.)youtube\.com$/.test(url.hostname) && Boolean(url.searchParams.get("list"));
+    const listId = url.searchParams.get("list");
+    return /(^|\.)youtube\.com$/.test(url.hostname) && Boolean(listId) && !isYouTubeRadioListId(listId);
   } catch {
     return false;
   }
+}
+
+export function isYouTubeRadioUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const listId = url.searchParams.get("list");
+    return /(^|\.)youtube\.com$/.test(url.hostname) && Boolean(url.searchParams.get("v")) && isYouTubeRadioListId(listId);
+  } catch {
+    return false;
+  }
+}
+
+function isYouTubeRadioListId(listId: string | null): boolean {
+  return Boolean(listId?.startsWith("RD"));
 }
 
 export function parseCookieHeader(cookieHeader: string): Cookie[] {
