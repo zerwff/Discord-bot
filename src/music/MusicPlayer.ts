@@ -168,7 +168,6 @@ export class MusicPlayer {
                   description,
                   highlightedTrack: startedTrack,
                   status: "재생 중",
-                  includeQueuePreview: true,
                 }),
               ),
             )
@@ -188,7 +187,6 @@ export class MusicPlayer {
       highlightedTrack: tracks[0],
       status: shouldStart ? "준비 중" : undefined,
       includeControls: shouldStart ? undefined : false,
-      includeQueuePreview: shouldStart,
       layout: shouldStart ? undefined : "queueAdded",
     });
   }
@@ -289,10 +287,10 @@ export class MusicPlayer {
     const queue = this.requireQueue(interaction.guildId);
 
     await this.respondWithQueue(interaction, queue, {
-      title: "음악 대기열",
+      title: "현재 재생 중",
       description: queue.tracks.length === 0 ? "대기열이 비어 있습니다." : "다음 곡 목록입니다.",
+      highlightedTrack: queue.current,
       includeQueuePreview: true,
-      layout: "queueList",
     });
   }
 
