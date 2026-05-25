@@ -168,6 +168,7 @@ export class MusicPlayer {
                   description,
                   highlightedTrack: startedTrack,
                   status: "재생 중",
+                  includeQueuePreview: true,
                 }),
               ),
             )
@@ -187,6 +188,7 @@ export class MusicPlayer {
       highlightedTrack: tracks[0],
       status: shouldStart ? "준비 중" : undefined,
       includeControls: shouldStart ? undefined : false,
+      includeQueuePreview: shouldStart,
       layout: shouldStart ? undefined : "queueAdded",
     });
   }
